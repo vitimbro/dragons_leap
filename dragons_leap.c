@@ -149,18 +149,6 @@ void update_dragon_physics() {
     }
 }
 
-// Desenha todos os sprites do jogo na tela.
-void draw_sprites() { 
-    char oam_id = 0; // Inicializa o contador de sprites no primeiro slot do OAM
-
-    // Desenha o metasprite do dragão na sua posição atual
-    oam_id = oam_meta_spr(dragon.x_pos, dragon.y_pos, oam_id, dragon_metasprite);
-
-    // Esconde todos os outros slots de sprite não utilizados para evitar "sprites fantasmas"
-    oam_hide_rest(oam_id); 
-}
-
-
 
 //--------------------------------------------------------//
 //                  FUNÇÕES AUXILIARES                    //
@@ -174,6 +162,18 @@ void setup_graphics() {
 
     bank_bg(0);               // Usa o banco de CHR 0 para os tiles do background
     bank_spr(1);              // Usa o banco de CHR 1 para os tiles dos sprites
+}
+
+
+// Desenha todos os sprites do jogo na tela.
+void draw_sprites() { 
+    char oam_id = 0; // Inicializa o contador de sprites no primeiro slot do OAM
+
+    // Desenha o metasprite do dragão na sua posição atual
+    oam_id = oam_meta_spr(dragon.x_pos, dragon.y_pos, oam_id, dragon_metasprite);
+
+    // Esconde todos os outros slots de sprite não utilizados para evitar "sprites fantasmas"
+    oam_hide_rest(oam_id); 
 }
 
 
