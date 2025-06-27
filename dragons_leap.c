@@ -84,7 +84,7 @@ const unsigned char dragon_metasprite[] = {
 
 // Constantes da física do dragão
 #define GRAVITY 4                       // Força da gravidade aplicada ao dragão (em subpixels/quadro²)
-#define MAX_GRAVITY 64                  // Velocidade máxima de queda (em subpixels/quadro)
+#define MAX_GRAVITY 80                  // Velocidade máxima de queda (em subpixels/quadro)
 #define JUMP_SPEED -64                  // Velocidade inicial do pulo (negativa para subir)
 
 
