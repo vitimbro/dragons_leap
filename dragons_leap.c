@@ -44,6 +44,14 @@ const char PALETTE[32] = {
     0x0D,0x27,0x2A	            // Paleta 3 dos Sprites
 };
 
+//--------------------------------------------------------//
+//                   SISTEMA DE SUBPIXEL                  //
+//--------------------------------------------------------//
+
+// Configuração de ponto fixo (subpixels) para movimento suave
+#define SUBPIXEL_SHIFT 4                        // 2^4 = 16 subpixels por pixel
+#define SUBPIXEL_UNIT (1 << SUBPIXEL_SHIFT)     // Representa 1 pixel em unidades de subpixel (16)
+
 
 //--------------------------------------------------------//
 //                 METASPRITE DO DRAGÃO                   //
@@ -69,10 +77,6 @@ const unsigned char dragon_metasprite[] = {
 //--------------------------------------------------------//
 //                   VARIÁVEIS DO DRAGÃO                  //
 //--------------------------------------------------------//
-
-// Configuração de ponto fixo (subpixels) para movimento suave
-#define SUBPIXEL_SHIFT 4                        // 2^4 = 16 subpixels por pixel
-#define SUBPIXEL_UNIT (1 << SUBPIXEL_SHIFT)     // Representa 1 pixel em unidades de subpixel (16)
 
 // Constantes de posição do dragão
 #define DRAGON_X_POS 50                 // Posição X fixa do dragão em pixels
@@ -151,6 +155,38 @@ void update_dragon_physics() {
 
 
 //--------------------------------------------------------//
+//                   SCROLL HORIZONTAL                    //
+//--------------------------------------------------------//
+
+#define NES_MIRRORING 1         // Ativa o Vertical Mirroring para o scroll horizontal
+
+#define SCROLL_SPEED 16         // Velocidade do scroll em subpixels por quadro
+
+#define TILE_SPRITE_ZERO 0x11E  // Índice do Tile utilizado como Sprite Zero
+
+int scroll_x_subpixel = 0;    // Posição do scroll em subpixels
+word scroll_x = 0;            // Posição do scroll em pixels (0-511)
+
+// Atualiza a variável de scroll (a posição da câmera)
+void update_scroll() { 
+  scroll_x_subpixel += SCROLL_SPEED;
+
+  // Converte a posição de subpixel para pixel
+  scroll_x = scroll_x_subpixel >> SUBPIXEL_SHIFT;
+}
+
+// Função dedicada para configurar o sprite zero uma única vez.
+void setup_sprite_zero() {
+    // oam_spr(x, y, tile, attr, oam_id)
+    oam_spr(10, 22, TILE_SPRITE_ZERO, OAM_BEHIND, 0); 
+    //  y: linha do split
+    //  tile: um tile com pelo menos um pixel não transparente, para garantir colisão com o background
+    //  attr = OAM_BEHIND (prioridade atrás do fundo, para ser invisível)
+    //  oam_id = 0 (TEM que ser o primeiro sprite na OAM)
+}
+
+
+//--------------------------------------------------------//
 //                  FUNÇÕES AUXILIARES                    //
 //--------------------------------------------------------//
 
@@ -162,12 +198,20 @@ void setup_graphics() {
 
     bank_bg(0);               // Usa o banco de CHR 0 para os tiles do background
     bank_spr(1);              // Usa o banco de CHR 1 para os tiles dos sprites
+  
+    // Desenha o fundo inicial nas nametables
+    vram_adr(NAMETABLE_A);
+    vram_write(nametable_background, 1024); // Escreve os 1024 bytes da nametable 
+    vram_adr(NAMETABLE_B);
+    vram_write(nametable_background, 1024);
 }
 
 
 // Desenha todos os sprites do jogo na tela.
 void draw_sprites() { 
-    char oam_id = 0; // Inicializa o contador de sprites no primeiro slot do OAM
+    // Começa a desenhar a partir do slot 1, pois o slot 0 está reservado para o sprite zero.
+    // Cada sprite ocupa 4 bytes no OAM, então o próximo ID livre é 4.
+    char oam_id = 4; // Inicializa o contador de sprites no primeiro slot livre da OAM
 
     // Desenha o metasprite do dragão na sua posição atual
     oam_id = oam_meta_spr(dragon.x_pos, dragon.y_pos, oam_id, dragon_metasprite);
@@ -185,10 +229,9 @@ void main(void)
 {
     // Executa a configuração inicial dos gráficos
     setup_graphics();
-
-    // Desenha o fundo inicial na nametable
-    vram_adr(NAMETABLE_A);
-    vram_write(nametable_background, 1024); // Escreve os 1024 bytes da nametable
+  
+    // Configura o sprite zero uma vez, na inicialização.
+    setup_sprite_zero();
 
     // Ativa a renderização da PPU para mostrar os gráficos na tela
     ppu_on_all();
@@ -198,8 +241,12 @@ void main(void)
 
     // Loop infinito que executa o jogo
     while(1) {
-        // Pausa a CPU e espera pelo próximo quadro, sincronizando o jogo com a tela
-        ppu_wait_nmi();
+        // A chamada a split() substitui ppu_wait_nmi()
+        // Ela espera pelo sprite zero e atualiza o scroll horizontal
+        split(scroll_x, 0);
+      
+        // Atualiza a posição da câmera
+        update_scroll();
 
         // Atualiza a lógica da física do dragão (movimento)
         update_dragon_physics();
