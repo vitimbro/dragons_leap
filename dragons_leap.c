@@ -175,7 +175,6 @@ word scroll_x = 0;            // Posição do scroll em pixels (0-511)
 void update_scroll();
 void setup_sprite_zero();
   
-  
 // Atualiza a variável de scroll (a posição da câmera)
 void update_scroll() { 
     scroll_x_subpixel += SCROLL_SPEED;
@@ -202,7 +201,7 @@ void setup_sprite_zero() {
 //                  VARIÁVEIS DAS TORRES                  //
 //--------------------------------------------------------//
 
-// Tiles da torre
+// Tiles usados para montar as partes superior e inferior da torre
 #define TILE_TOP_LEFT   0x88
 #define TILE_TOP_MID    0x89
 #define TILE_TOP_RIGHT  0x8A
@@ -211,17 +210,20 @@ void setup_sprite_zero() {
 #define TILE_BOT_MID    0xA9
 #define TILE_BOT_RIGHT  0xAA
 
-// Constantes
-#define TOWER_HEIGHT       22      // 8 + 6 + 8
-#define TOWER_COLUMNS      4       // L, M, M, R
-#define TOWER_GAP_START    8
-#define TOWER_GAP_END      14
+// Parâmetros da torre
+#define TOWER_HEIGHT       22      // Altura total da torre (em tiles verticais)
+#define TOWER_COLUMNS      4       // Número de colunas por torre (L, M, M, R)
+#define TOWER_GAP_START    8       // Tile onde começa o espaço (gap)
+#define TOWER_GAP_HEIGHT   6       // Tamanho vertical do gap em tiles
 
+// Dimensões da tela em tiles
 #define SCREEN_WIDTH_TILES 32
-#define SCORE_HEIGHT 4
+#define SCORE_HEIGHT 4             // Linhas reservadas para a pontuação
 
+// Número total de torres fixas no jogo (duas por nametable)
 #define NUM_TOWERS 4
 
+// Posições de scroll (em tiles) que disparam o redesenho de cada torre
 #define SCROLL_TOWER_0 31
 #define SCROLL_TOWER_1 46
 #define SCROLL_TOWER_2 0
@@ -229,10 +231,11 @@ void setup_sprite_zero() {
 
 
 typedef struct {
-    byte nametable_id;       // 0: Nametable A, 1: Nametable B
-    byte collum_index;       // 0 a 3 (qual das 4 colunas da torre está sendo desenhada)
-    byte base_collum;        // coluna base na nametable (0 ou 16)
-    bool drawn;              // se a torre já foi desenhada
+    byte nametable_id;    // 0 = Nametable A, 1 = Nametable B
+    byte collum_index;    // Índice da coluna da torre a ser desenhada (0–3)
+    byte base_collum;     // Coluna base dentro da nametable (0 ou 16)
+    byte gap_start;       // Define onde a lacuna da torre começa
+    bool drawn;           // Indica se essa torre já foi desenhada neste ciclo
 } Tower;
 
 Tower towers[NUM_TOWERS];
@@ -243,7 +246,7 @@ byte color_buffer[TOWER_HEIGHT / 4];
 
 
 void initialize_towers();
-void fill_tower_column(byte *buffer, byte column);
+void fill_tower_column(byte *buffer, byte column, byte gap_start);
 word nametable_to_attribute_addr(word a);
 void fill_color_buffer(byte palette_index);
 void put_color(word addr);
@@ -273,37 +276,32 @@ void initialize_towers() {
     for (i = 0; i < NUM_TOWERS; i++) {
         towers[i].collum_index = 0;
         towers[i].drawn = false;
+        towers[i].gap_start = TOWER_GAP_START;
     }
 }
 
 
 // Preenche a coluna de tiles no buffer
-void fill_tower_column(byte *buffer, byte column) {
+void fill_tower_column(byte *buffer, byte column, byte gap_start) {
     byte top_tile;
     byte bottom_tile;
+  
+    byte gap_end = gap_start + TOWER_GAP_HEIGHT;
   
     byte i;
 
     // Define quais tiles usar com base na coluna (0 = L, 1 ou 2 = M, 3 = R)
     switch (column) {
-        case 0:
-            top_tile = TILE_TOP_LEFT;
-            bottom_tile = TILE_BOT_LEFT;
-            break;
-        case 3:
-            top_tile = TILE_TOP_RIGHT;
-            bottom_tile = TILE_BOT_RIGHT;
-            break;
-        default:
-            top_tile = TILE_TOP_MID;
-            bottom_tile = TILE_BOT_MID;
-            break;
+        case 0:  top_tile = TILE_TOP_LEFT;  bottom_tile = TILE_BOT_LEFT;  break;
+        case 3:  top_tile = TILE_TOP_RIGHT; bottom_tile = TILE_BOT_RIGHT; break;
+        default: top_tile = TILE_TOP_MID;   bottom_tile = TILE_BOT_MID;   break;
     }
 
+    // Preenche o buffer vertical de 22 tiles, linha por linha.
     for (i = 0; i < TOWER_HEIGHT; i++) {
-        if (i >= TOWER_GAP_START && i < TOWER_GAP_END) {
+        if ((i >= gap_start) && (i < gap_end)) {
             buffer[i] = 0x00;  // lacuna
-        } else if (i < TOWER_GAP_START) {
+        } else if (i < gap_start) {
             buffer[i] = top_tile;
         } else {
             buffer[i] = bottom_tile;
@@ -319,7 +317,7 @@ void draw_tower_column(Tower* tower) {
     word base_nametable;
     word addr;
 
-    fill_tower_column(buffer, tower->collum_index);
+    fill_tower_column(buffer, tower->collum_index, tower->gap_start);
 
     base_nametable = (tower->nametable_id == 0) ? NAMETABLE_A : NAMETABLE_B;
 
@@ -351,37 +349,37 @@ void update_towers(word scroll_x) {
     // Torre 2 → scroll tile 0 (inicio da NT B)
     if (scroll_tile == SCROLL_TOWER_2 && !towers[2].drawn) {
         draw_tower_column(&towers[2]);
-
         // Torre 0 saiu da tela
         towers[0].drawn = false;
         towers[0].collum_index = 0;
+        towers[0].gap_start = TOWER_GAP_START;
     }
 
     // Torre 3 → scroll tile 15 (meio da NT B)
     if (scroll_tile == SCROLL_TOWER_3 && !towers[3].drawn) {
         draw_tower_column(&towers[3]);
-
         // Torre 1 saiu da tela
         towers[1].drawn = false;
         towers[1].collum_index = 0;
+        towers[1].gap_start = TOWER_GAP_START;
     }
 
     // Torre 0 → scroll tile 31 (inicio da NT A)
     if (scroll_tile == SCROLL_TOWER_0 && !towers[0].drawn) {
         draw_tower_column(&towers[0]);
-
         // Torre 2 saiu da tela
         towers[2].drawn = false;
         towers[2].collum_index = 0;
+        towers[2].gap_start = TOWER_GAP_START;
     }
 
     // Torre 1 → scroll tile 46 (meio da NT A)
     if (scroll_tile == SCROLL_TOWER_1 && !towers[1].drawn) {
         draw_tower_column(&towers[1]);
-
         // Torre 3 saiu da tela
         towers[3].drawn = false;
         towers[3].collum_index = 0;
+        towers[3].gap_start = TOWER_GAP_START;
     }
 }
 
@@ -459,37 +457,32 @@ void draw_sprites() {
 
 void main(void)
 {
-    // Executa a configuração inicial dos gráficos
-    setup_graphics();
+    setup_graphics();     // Executa a configuração inicial dos gráficos
   
-    // Configura o sprite zero uma vez, na inicialização.
-    setup_sprite_zero();
+    setup_sprite_zero();  // Configura o sprite zero uma vez, na inicialização.
   
-    vrambuf_clear();          // Clear VRAM buffer
-    set_vram_update(updbuf);  // Link VRAM update buffer
+    vrambuf_clear();          // Limpa o VRAM buffer
+    set_vram_update(updbuf);  // Vincula VRAM update buffer
 
-    // Define a posição inicial do dragão
-    initialize_dragon();
+    initialize_dragon();  // Define a posição inicial do dragão
   
-    initialize_towers();
+    initialize_towers();  // Define as variáveis iniciais das torres
   
-    // Ativa a renderização da PPU para mostrar os gráficos na tela
-    ppu_on_all();
+    ppu_on_all();    // Ativa a renderização da PPU para mostrar os gráficos na tela
 
     // Loop infinito que executa o jogo
     while(1) {
         ppu_wait_nmi();   // wait for NMI to ensure previous frame finished
         vrambuf_clear();  // Clear VRAM buffer each frame immediately after NMI
       
-        // Ela espera pelo sprite zero e atualiza o scroll horizontal
-        split(scroll_x, 0);
+        split(scroll_x, 0);  // Ela espera pelo sprite zero e atualiza o scroll horizontal
       
-        // Atualiza a posição da câmera
-        update_scroll();
+        update_scroll();     // Atualiza a posição da câmera
 
         // Atualiza a lógica da física do dragão (movimento)
         update_dragon_physics();
       
+        // Atualiza a lógica das torres
         update_towers(scroll_x);
 
         // Desenha todos os sprites na tela
